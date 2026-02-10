@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Psd to Figma Importer Free</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+        color: #0f172a;
+      }
+      .app {
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+        border: 1px solid #e2e8f0;
+        padding: 14px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      .subtitle {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #475569;
+      }
+      .dropzone {
+        border: 1.5px dashed #6366f1;
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.07);
+        min-height: 124px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 160ms ease;
+      }
+      .dropzone.drag {
+        background: rgba(99, 102, 241, 0.16);
+        border-color: #4f46e5;
+        transform: scale(0.996);
+      }
+      .dropzone strong {
+        display: block;
+        font-size: 14px;
+      }
+      .dropzone small {
+        margin-top: 6px;
+        color: #475569;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .row.wrap {
+        flex-wrap: wrap;
+      }
+      .mode {
+        flex: 1;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 10px;
+        cursor: pointer;
+        min-width: 180px;
+        background: #fff;
+      }
+      .mode.active {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+      }
+      .mode b {
+        display: block;
+        font-size: 12px;
+      }
+      .mode span {
+        display: block;
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 4px;
+        line-height: 1.35;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        height: 38px;
+        padding: 0 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.15s ease;
+      }
+      button.primary {
+        background: #4f46e5;
+        color: white;
+      }
+      button.primary:disabled {
+        background: #a5b4fc;
+        cursor: not-allowed;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1e293b;
+      }
+      .status {
+        font-size: 12px;
+        min-height: 18px;
+        color: #334155;
+      }
+      .status.ok { color: #166534; }
+      .status.err { color: #b91c1c; }
+      .credits {
+        font-size: 11px;
+        color: #475569;
+        line-height: 1.45;
+      }
+      .credits b {
+        color: #0f172a;
+      }
+      input[type='file'] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="card">
+        <h1>Psd to Figma Importer Free</h1>
+        <p class="subtitle">
+          Fast PSD importer with two modes: fully flattened for maximum visual fidelity, or per-layer import for editable positioning.
+        </p>
+      </div>
+
+      <div class="card">
+        <label class="dropzone" id="dropzone" for="fileInput">
+          <div>
+            <strong id="fileLabel">Drop .psd file here or click to select</strong>
+            <small>Large or complex effects are auto-rasterized to keep import stable and fast.</small>
+          </div>
+        </label>
+        <input id="fileInput" type="file" accept=".psd" />
+      </div>
+
+      <div class="card">
+        <div class="row wrap" id="modeGroup">
+          <label class="mode active" data-mode="flatten">
+            <b>Import as single flattened image</b>
+            <span>Best 1:1 visual result and fastest import speed.</span>
+          </label>
+          <label class="mode" data-mode="layers">
+            <b>Import as layer images</b>
+            <span>Preserves layer placement; complex effects fallback to image slices.</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="primary" id="importBtn" disabled>Import PSD</button>
+        <button class="secondary" id="closeBtn">Close</button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="credits">
+        Built free for the community.<br />
+        Respect to: <b>theking_1139</b> (Discord / X / Roblox)
+      </div>
+    </div>
+
+    <script type="module">
+      import { readPsd, initializeCanvas } from 'https://esm.sh/ag-psd@19.0.6';
+
+      initializeCanvas(
+        (width, height) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          return canvas;
+        },
+        (data) => {
+          const blob = new Blob([data]);
+          const url = URL.createObjectURL(blob);
+          const image = new Image();
+          image.src = url;
+          return image;
+        },
+        (width, height) => new ImageData(width, height)
+      );
+
+      const state = {
+        file: null,
+        mode: 'flatten',
+        busy: false
+      };
+
+      const fileInput = document.getElementById('fileInput');
+      const dropzone = document.getElementById('dropzone');
+      const fileLabel = document.getElementById('fileLabel');
+      const status = document.getElementById('status');
+      const importBtn = document.getElementById('importBtn');
+      const closeBtn = document.getElementById('closeBtn');
+      const modeGroup = document.getElementById('modeGroup');
+
+      function setStatus(message, kind = '') {
+        status.textContent = message || '';
+        status.className = `status ${kind}`.trim();
+      }
+
+      function setBusy(isBusy) {
+        state.busy = isBusy;
+        importBtn.disabled = isBusy || !state.file;
+        importBtn.textContent = isBusy ? 'Importing…' : 'Import PSD';
+      }
+
+      function updateFile(file) {
+        state.file = file;
+        fileLabel.textContent = file ? `${file.name} (${Math.round(file.size / 1024)} KB)` : 'Drop .psd file here or click to select';
+        importBtn.disabled = !file || state.busy;
+      }
+
+      function chooseMode(mode) {
+        state.mode = mode;
+        modeGroup.querySelectorAll('.mode').forEach((element) => {
+          element.classList.toggle('active', element.dataset.mode === mode);
+        });
+      }
+
+      async function blobToPngBytes(blob) {
+        const buffer = await blob.arrayBuffer();
+        return Array.from(new Uint8Array(buffer));
+      }
+
+      async function canvasToPngBytes(canvas) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('Could not encode PNG image.');
+        return blobToPngBytes(blob);
+      }
+
+      function renderFallbackSlice(compositeCanvas, layer) {
+        const left = Math.max(0, Math.floor(layer.left || 0));
+        const top = Math.max(0, Math.floor(layer.top || 0));
+        const right = Math.min(compositeCanvas.width, Math.ceil(layer.right || left));
+        const bottom = Math.min(compositeCanvas.height, Math.ceil(layer.bottom || top));
+        const width = Math.max(1, right - left);
+        const height = Math.max(1, bottom - top);
+
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = width;
+        sliceCanvas.height = height;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(compositeCanvas, left, top, width, height, 0, 0, width, height);
+
+        return {
+          canvas: sliceCanvas,
+          x: left,
+          y: top,
+          width,
+          height
+        };
+      }
+
+      async function collectLayers(psd, compositeCanvas) {
+        const result = [];
+
+        async function walk(layers = []) {
+          for (const layer of layers) {
+            if (!layer || layer.hidden) continue;
+
+            if (Array.isArray(layer.children) && layer.children.length) {
+              await walk(layer.children);
+              continue;
+            }
+
+            const name = layer.name || 'Layer';
+            let sourceCanvas = layer.canvas;
+            let x = Math.round(layer.left || 0);
+            let y = Math.round(layer.top || 0);
+            let width = sourceCanvas?.width || Math.max(1, Math.round((layer.right || 1) - (layer.left || 0)));
+            let height = sourceCanvas?.height || Math.max(1, Math.round((layer.bottom || 1) - (layer.top || 0)));
+
+            if (!sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) {
+              const fallback = renderFallbackSlice(compositeCanvas, layer);
+              sourceCanvas = fallback.canvas;
+              x = fallback.x;
+              y = fallback.y;
+              width = fallback.width;
+              height = fallback.height;
+            }
+
+            const pngBytes = await canvasToPngBytes(sourceCanvas);
+            result.push({ name, x, y, width, height, pngBytes });
+          }
+        }
+
+        await walk(psd.children || []);
+        return result;
+      }
+
+      async function buildImportPayload(file, mode) {
+        const buffer = await file.arrayBuffer();
+        const psd = readPsd(buffer, {
+          useImageData: true,
+          skipLayerImageData: false,
+          skipCompositeImageData: false
+        });
+
+        if (!psd.canvas) {
+          throw new Error('Could not decode PSD composite image.');
+        }
+
+        const compositePng = await canvasToPngBytes(psd.canvas);
+
+        const payload = {
+          mode,
+          name: file.name.replace(/\.psd$/i, '') || 'PSD Import',
+          width: psd.width || psd.canvas.width,
+          height: psd.height || psd.canvas.height,
+          compositePng,
+          layers: []
+        };
+
+        if (mode === 'layers') {
+          payload.layers = await collectLayers(psd, psd.canvas);
+        }
+
+        return payload;
+      }
+
+      async function startImport() {
+        if (!state.file || state.busy) return;
+
+        try {
+          setBusy(true);
+          setStatus('Decoding PSD…');
+          const payload = await buildImportPayload(state.file, state.mode);
+
+          setStatus('Sending to Figma…');
+          parent.postMessage({
+            pluginMessage: {
+              type: 'IMPORT_PSD',
+              payload
+            }
+          }, '*');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Import failed while processing PSD.';
+          setStatus(message, 'err');
+          setBusy(false);
+        }
+      }
+
+      fileInput.addEventListener('change', (event) => {
+        const file = event.target.files?.[0] || null;
+        if (file && !file.name.toLowerCase().endsWith('.psd')) {
+          setStatus('Please choose a .psd file.', 'err');
+          updateFile(null);
+          return;
+        }
+        setStatus('');
+        updateFile(file);
+      });
+
+      dropzone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        dropzone.classList.add('drag');
+      });
+
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('drag');
+      });
+
+      dropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropzone.classList.remove('drag');
+
+        const file = event.dataTransfer?.files?.[0] || null;
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith('.psd')) {
+          setStatus('Only .psd files are supported.', 'err');
+          updateFile(null);
+          return;
+        }
+
+        updateFile(file);
+        setStatus('');
+      });
+
+      modeGroup.addEventListener('click', (event) => {
+        const target = event.target.closest('.mode');
+        if (!target) return;
+        chooseMode(target.dataset.mode);
+      });
+
+      importBtn.addEventListener('click', startImport);
+
+      closeBtn.addEventListener('click', () => {
+        parent.postMessage({ pluginMessage: { type: 'CLOSE_PLUGIN' } }, '*');
+      });
+
+      window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg || !msg.type) return;
+
+        if (msg.type === 'IMPORT_DONE') {
+          setStatus(msg.payload?.message || 'Imported successfully.', 'ok');
+          setBusy(false);
+        }
+
+        if (msg.type === 'IMPORT_ERROR') {
+          setStatus(msg.payload?.message || 'Import failed.', 'err');
+          setBusy(false);
+        }
+      };
+    </script>
+  </body>
+</html>
