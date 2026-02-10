@@ -123,8 +123,12 @@
         min-height: 18px;
         color: #334155;
       }
-      .status.ok { color: #166534; }
-      .status.err { color: #b91c1c; }
+      .status.ok {
+        color: #166534;
+      }
+      .status.err {
+        color: #b91c1c;
+      }
       .credits {
         font-size: 11px;
         color: #475569;
@@ -184,29 +188,13 @@
     </div>
 
     <script type="module">
-      import { readPsd, initializeCanvas } from 'https://esm.sh/ag-psd@19.0.6';
-
-      initializeCanvas(
-        (width, height) => {
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          return canvas;
-        },
-        (data) => {
-          const blob = new Blob([data]);
-          const url = URL.createObjectURL(blob);
-          const image = new Image();
-          image.src = url;
-          return image;
-        },
-        (width, height) => new ImageData(width, height)
-      );
+      let readPsd;
 
       const state = {
         file: null,
         mode: 'flatten',
-        busy: false
+        busy: false,
+        parserReady: false
       };
 
       const fileInput = document.getElementById('fileInput');
@@ -224,14 +212,16 @@
 
       function setBusy(isBusy) {
         state.busy = isBusy;
-        importBtn.disabled = isBusy || !state.file;
+        importBtn.disabled = isBusy || !state.file || !state.parserReady;
         importBtn.textContent = isBusy ? 'Importing…' : 'Import PSD';
       }
 
       function updateFile(file) {
         state.file = file;
-        fileLabel.textContent = file ? `${file.name} (${Math.round(file.size / 1024)} KB)` : 'Drop .psd file here or click to select';
-        importBtn.disabled = !file || state.busy;
+        fileLabel.textContent = file
+          ? `${file.name} (${Math.round(file.size / 1024)} KB)`
+          : 'Drop .psd file here or click to select';
+        importBtn.disabled = !file || state.busy || !state.parserReady;
       }
 
       function chooseMode(mode) {
@@ -264,6 +254,9 @@
         sliceCanvas.width = width;
         sliceCanvas.height = height;
         const ctx = sliceCanvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Could not create canvas context.');
+        }
         ctx.drawImage(compositeCanvas, left, top, width, height, 0, 0, width, height);
 
         return {
@@ -343,7 +336,7 @@
       }
 
       async function startImport() {
-        if (!state.file || state.busy) return;
+        if (!state.file || state.busy || !state.parserReady) return;
 
         try {
           setBusy(true);
@@ -351,12 +344,15 @@
           const payload = await buildImportPayload(state.file, state.mode);
 
           setStatus('Sending to Figma…');
-          parent.postMessage({
-            pluginMessage: {
-              type: 'IMPORT_PSD',
-              payload
-            }
-          }, '*');
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'IMPORT_PSD',
+                payload
+              }
+            },
+            '*'
+          );
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Import failed while processing PSD.';
           setStatus(message, 'err');
@@ -426,6 +422,39 @@
           setBusy(false);
         }
       };
+
+      async function initParser() {
+        try {
+          setStatus('Loading PSD parser…');
+          const mod = await import('https://esm.sh/ag-psd@19.0.6');
+          readPsd = mod.readPsd;
+          mod.initializeCanvas(
+            (width, height) => {
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              return canvas;
+            },
+            (data) => {
+              const blob = new Blob([data]);
+              const url = URL.createObjectURL(blob);
+              const image = new Image();
+              image.src = url;
+              return image;
+            },
+            (width, height) => new ImageData(width, height)
+          );
+          state.parserReady = true;
+          setStatus('Ready to import PSD files.', 'ok');
+          importBtn.disabled = !state.file;
+        } catch (_error) {
+          state.parserReady = false;
+          importBtn.disabled = true;
+          setStatus('Could not load PSD parser. Please check internet and reopen plugin.', 'err');
+        }
+      }
+
+      initParser();
     </script>
   </body>
 </html>
